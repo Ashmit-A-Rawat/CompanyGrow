@@ -13,7 +13,7 @@ const auth = (req, res, next) => {
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'companygrow_secret_key');
     
     // Add user info to request object
     req.user = decoded;
