@@ -1,5 +1,6 @@
 const Project = require('../models/project.model');
 const User = require('../models/user.model');
+const { notifyUser } = require('../socket');
 
 // Asigning a Project to a User
 const assignProjectToUser = async (userId, projectId) => {
@@ -49,6 +50,12 @@ const assignProjectToUser = async (userId, projectId) => {
   }
 
   await user.save();
+
+  notifyUser(userId, 'project:assigned', {
+    message: `You were assigned to project "${project.name}"`,
+    projectId: project._id,
+    projectName: project.name
+  });
 };
 
 const deassignProjectFromUser = async (userId, projectId) => {
@@ -461,6 +468,13 @@ const completeProject = async (req, res) => {
       }
 
       await user.save();
+
+      notifyUser(user._id, 'project:completed', {
+        message: `Project "${project.name}" was marked complete${project.badgeReward ? ` — you earned a ${project.badgeReward} badge` : ''}`,
+        projectId: project._id,
+        projectName: project.name,
+        badgeReward: project.badgeReward || null
+      });
     }
 
     res.status(200).json({ message: 'Project marked as completed', project });

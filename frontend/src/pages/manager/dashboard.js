@@ -5,6 +5,7 @@ import Manage from './manage';
 import Review from './review';
 import Profile from './profile';
 import makeAuthenticatedRequest from '../../utils/api';
+import NotificationBell from '../../components/NotificationBell';
 const ManagerDashboard = () => {
   const [activeTab, setActiveTab] = useState('catalog');
   const [hoveredTab, setHoveredTab] = useState(null);
@@ -313,19 +314,22 @@ const ManagerDashboard = () => {
               Profile
             </button>
           </div>
-          
-          <button 
-            style={{
-              ...styles.logoutButton,
-              ...(logoutHovered ? styles.logoutButtonHover : {})
-            }}
-            onMouseEnter={() => setLogoutHovered(true)}
-            onMouseLeave={() => setLogoutHovered(false)}
-            onClick={handleLogout}
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <NotificationBell />
+            <button
+              style={{
+                ...styles.logoutButton,
+                ...(logoutHovered ? styles.logoutButtonHover : {})
+              }}
+              onMouseEnter={() => setLogoutHovered(true)}
+              onMouseLeave={() => setLogoutHovered(false)}
+              onClick={handleLogout}
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
       

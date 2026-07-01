@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import AdminCoursesTab from './courses';
 import AdminProjectsTab from './projects';
+import NotificationBell from '../../components/NotificationBell';
 
 // Move this OUTSIDE the main component - this is crucial
 const EmployeeForm = ({ 
@@ -1527,17 +1528,20 @@ const apiRequest = async (endpoint, options = {}) => {
               Projects
             </button>
           </div>
-          <button 
-            style={styles.logoutButton} 
-            onClick={(e) => {
-              e.preventDefault();
-              handleLogout();
-            }}
-            type="button"
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <NotificationBell />
+            <button
+              style={styles.logoutButton}
+              onClick={(e) => {
+                e.preventDefault();
+                handleLogout();
+              }}
+              type="button"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
 

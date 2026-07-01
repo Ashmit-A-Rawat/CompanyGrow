@@ -1,4 +1,6 @@
 // utils/api.js
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+
 const makeAuthenticatedRequest = async (url, options = {}) => {
   const token = localStorage.getItem('token');
   
@@ -10,7 +12,7 @@ const makeAuthenticatedRequest = async (url, options = {}) => {
     ...options
   };
 
-  const response = await fetch(`http://localhost:4000${url}`, config);
+  const response = await fetch(`${API_URL}${url}`, config);
   
   // Handle token expiration
   if (response.status === 401) {

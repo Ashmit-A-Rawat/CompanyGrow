@@ -1,5 +1,6 @@
 const Course = require('../models/course.model');
 const User = require('../models/user.model');
+const { notifyUser } = require('../socket');
 
 const getCurrentBiMonthPeriod = () => {
   const now = new Date();
@@ -250,6 +251,15 @@ const completeModule = async (req, res) => {
 
     await course.save();
     await user.save();
+
+    if (goalStatus === 'completed') {
+      notifyUser(userId, 'course:completed', {
+        message: `Course "${course.name}" completed${course.badgeReward ? ` — you earned a ${course.badgeReward} badge` : ''}`,
+        courseId: course._id,
+        courseName: course.name,
+        badgeReward: course.badgeReward || null
+      });
+    }
 
     res.status(200).json({
       message: 'Module completed successfully',

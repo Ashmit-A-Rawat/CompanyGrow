@@ -3,6 +3,8 @@ import { Eye, EyeOff, Mail, Lock, LogIn, UserPlus, User, Phone, Briefcase } from
 import { useNavigate } from 'react-router-dom';
 import './login.css';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({ 
@@ -41,7 +43,7 @@ export default function AuthPage() {
   };
 
   const loginUser = async (userData) => {
-    const response = await fetch('http://localhost:4000/api/auth/login', {
+    const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
@@ -62,7 +64,7 @@ export default function AuthPage() {
   };
 
   const signupUser = async (userData) => {
-    const response = await fetch('http://localhost:4000/api/auth/signup', {
+    const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),

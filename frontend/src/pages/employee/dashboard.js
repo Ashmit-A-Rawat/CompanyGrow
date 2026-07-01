@@ -5,6 +5,7 @@ import Develop from './develop';
 import Perf from './perf';
 import Profile from './profile';
 import makeAuthenticatedRequest from '../../utils/api';
+import NotificationBell from '../../components/NotificationBell';
 const EmployeeDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard'); // Default to dashboard home
   const [hoveredTab, setHoveredTab] = useState(null);
@@ -322,19 +323,22 @@ const EmployeeDashboard = () => {
               Profile
             </button>
           </div>
-          
-          <button 
-            style={{
-              ...styles.logoutButton,
-              ...(logoutHovered ? styles.logoutButtonHover : {})
-            }}
-            onMouseEnter={() => setLogoutHovered(true)}
-            onMouseLeave={() => setLogoutHovered(false)}
-            onClick={handleLogout}
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <NotificationBell />
+            <button
+              style={{
+                ...styles.logoutButton,
+                ...(logoutHovered ? styles.logoutButtonHover : {})
+              }}
+              onMouseEnter={() => setLogoutHovered(true)}
+              onMouseLeave={() => setLogoutHovered(false)}
+              onClick={handleLogout}
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
       

@@ -1,29 +1,38 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const User = require('../models/user.model'); // Adjust path as needed
+const { notifyUser } = require('../socket');
 
 // POST /api/payment/approve-badges
 const approveBadges = async (req, res) => {
   try {
     const { managerId,employeeId, badgeIds } = req.body;
-    
+
     const user = await User.findById(employeeId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Mark selected badges as approved
+    let approvedCount = 0;
     user.performanceMetrics.forEach(metric => {
       metric.badgesEarned.forEach(badge => {
          const badgeId = `${metric.period}-${badge.type}-${badge.title}-${badge.dateEarned.toISOString()}`;
         if (badgeIds.includes(badgeId)) {
           badge.approved = true;
+          approvedCount++;
         }
       });
     });
 
     await user.save();
+
+    notifyUser(employeeId, 'badge:approved', {
+      message: `${approvedCount} badge${approvedCount === 1 ? '' : 's'} approved by your manager`,
+      approvedCount
+    });
+
     res.json({ message: 'Badges approved successfully' });
-    
+
   } catch (error) {
     console.error('Error approving badges:', error);
     res.status(500).json({ error: error.message });
