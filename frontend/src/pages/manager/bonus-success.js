@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import makeAuthenticatedRequest from '../../utils/api';
 const BonusSuccess = () => {
@@ -7,14 +7,18 @@ const BonusSuccess = () => {
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const hasProcessedRef = useRef(false);
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
     console.log('🔍 Session ID from URL:', sessionId);
     if (sessionId) {
-      // Fetch session details from your backend
-      console.log("yes session id exists");
-      fetchSessionDetails(sessionId);
+      // Guard against React.StrictMode's dev-mode double effect invocation,
+      // which would otherwise call approve-badges (and its email/notification) twice.
+      if (!hasProcessedRef.current) {
+        hasProcessedRef.current = true;
+        fetchSessionDetails(sessionId);
+      }
     } else {
       setError('No session ID found');
       setLoading(false);

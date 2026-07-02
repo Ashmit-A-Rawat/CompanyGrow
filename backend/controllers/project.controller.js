@@ -56,6 +56,21 @@ const assignProjectToUser = async (userId, projectId) => {
     projectId: project._id,
     projectName: project.name
   });
+
+  if (process.env.N8N_PROJECT_ASSIGNED_WEBHOOK_URL) {
+    const manager = project.managedBy ? await User.findById(project.managedBy) : null;
+    fetch(process.env.N8N_PROJECT_ASSIGNED_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employeeName: user.name,
+        employeeEmail: user.email,
+        projectName: project.name,
+        managerName: manager ? manager.name : 'Unassigned',
+        assignedAt: new Date().toISOString()
+      })
+    }).catch(err => console.error('n8n webhook error:', err.message));
+  }
 };
 
 const deassignProjectFromUser = async (userId, projectId) => {

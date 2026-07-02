@@ -13,23 +13,40 @@ const approveBadges = async (req, res) => {
     }
 
     // Mark selected badges as approved
-    let approvedCount = 0;
+    const approvedBadgeTitles = [];
     user.performanceMetrics.forEach(metric => {
       metric.badgesEarned.forEach(badge => {
          const badgeId = `${metric.period}-${badge.type}-${badge.title}-${badge.dateEarned.toISOString()}`;
         if (badgeIds.includes(badgeId)) {
           badge.approved = true;
-          approvedCount++;
+          approvedBadgeTitles.push(badge.title);
         }
       });
     });
 
     await user.save();
 
-    notifyUser(employeeId, 'badge:approved', {
-      message: `${approvedCount} badge${approvedCount === 1 ? '' : 's'} approved by your manager`,
-      approvedCount
-    });
+    const approvedCount = approvedBadgeTitles.length;
+
+    if (approvedCount > 0) {
+      const message = `${approvedCount} badge${approvedCount === 1 ? '' : 's'} approved by your manager`;
+
+      notifyUser(employeeId, 'badge:approved', { message, approvedCount });
+
+      if (process.env.N8N_BADGE_APPROVED_WEBHOOK_URL) {
+        fetch(process.env.N8N_BADGE_APPROVED_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            employeeName: user.name,
+            employeeEmail: user.email,
+            badgeName: approvedBadgeTitles.join(', '),
+            approvedAt: new Date().toISOString()
+          })
+        }).catch(err => console.error('n8n webhook error:', err.message));
+      }
+    }
 
     res.json({ message: 'Badges approved successfully' });
 
