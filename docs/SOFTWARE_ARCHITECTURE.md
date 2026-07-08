@@ -136,8 +136,8 @@ There is no separate payment microservice, no worker process, and no API gateway
 
 This is one of the few sections in this document describing a **confirmed, live** deployment rather than only local development — CompanyGrow is actually deployed, which is not a given for a project at this stage:
 
-- **Frontend**: Vercel, root directory `frontend`, Create React App preset, static build served from Vercel's CDN.
-- **Backend**: Render, root directory `backend`, `node server.js`, connected to a MongoDB Atlas cluster.
+- **Frontend**: Vercel, root directory `frontend`, Create React App preset, static build served from Vercel's CDN — live at [company-grow-rho.vercel.app](https://company-grow-rho.vercel.app).
+- **Backend**: Render, root directory `backend`, `node server.js`, connected to a MongoDB Atlas cluster — live at [companygrow-backend-meud.onrender.com](https://companygrow-backend-meud.onrender.com).
 - **n8n**: not deployed publicly — runs only in a local Docker container. The production backend's `N8N_*_WEBHOOK_URL` environment variables point at `localhost:5678`, which is unreachable from Render's servers. In production, the fire-and-forget webhook calls simply fail silently (caught, logged, non-blocking) — see §13.1.
 
 ---

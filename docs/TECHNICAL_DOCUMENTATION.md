@@ -448,7 +448,8 @@ A typical authenticated request flows: `server.js` (HTTP server, Socket.io attac
 | n8n | Workflow automation | Two controllers POST JSON to a configured webhook URL on badge approval and project assignment | Self-hosted via Docker; not publicly reachable, so silent no-op in the production deployment |
 | Socket.IO | Real-time notifications | JWT-authenticated; backend emits to per-user private rooms | See Section 18.4 |
 | MongoDB Atlas | Database hosting | `MONGO_URI` connection string | Outside application code |
-| Vercel / Render | Hosting | Frontend / backend deployment respectively | Live — see the README for URLs |
+| Vercel | Frontend hosting | Static build deployment from `frontend/` | Live at [company-grow-rho.vercel.app](https://company-grow-rho.vercel.app) |
+| Render | Backend hosting | `node server.js` process deployment from `backend/` | Live at [companygrow-backend-meud.onrender.com](https://companygrow-backend-meud.onrender.com) (free tier — sleeps after inactivity) |
 | GitHub Actions | CI | Runs backend tests + frontend build on push/PR to `main` | `.github/workflows/ci.yml` |
 
 ## 18. Security Features
