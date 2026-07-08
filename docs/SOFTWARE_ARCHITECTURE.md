@@ -97,31 +97,56 @@ The React SPA issues REST calls to the Express API for the large majority of rea
 
 ### 4.1 Topology
 
-```
-                              ┌────────────────────────────┐
-                              │        MongoDB Atlas         │
-                              │   (User, Course, Project)     │
-                              └──────────────▲─────────────┘
-                                             │ Mongoose
-                                             │
-   ┌───────────────────┐   HTTPS / JSON   ┌──┴────────────────────────┐
-   │   React SPA        │ ───────────────▶ │       Express API          │
-   │  (Vercel, static)   │ ◀─────────────── │  backend/server.js         │
-   │                      │  Socket.IO (WS)  │  REST routes + Socket.IO   │
-   └──────────┬───────────┘◀────────────────┤  server on one HTTP server │
-              │                              └──────┬──────────┬─────────┘
-              │ redirect                            │          │
-              ▼                                      ▼          ▼ fire-and-forget
-        ┌───────────┐                          ┌──────────┐  ┌────────────┐
-        │  Stripe    │                          │  Stripe   │  │    n8n      │
-        │  Checkout  │◀─────────────────────────┤  API      │  │ (Docker,    │
-        │  (browser) │      session created      │ (server)  │  │  localhost) │
-        └───────────┘                          └──────────┘  └────────────┘
+```mermaid
+flowchart LR
+    SPA["React SPA<br/>(Vercel, static build)"]
+    API["Express API<br/>backend/server.js<br/>REST routes + Socket.IO<br/>on one HTTP server"]
+    DB[("MongoDB Atlas<br/>User · Course · Project")]
+    StripeAPI["Stripe API<br/>(server-side session create/retrieve)"]
+    StripeUI["Stripe Checkout<br/>(hosted page, in browser)"]
+    N8N["n8n<br/>(Docker, localhost:5678)"]
+
+    SPA -->|"HTTPS / JSON REST"| API
+    API -->|"Socket.IO (WS), JWT-authenticated"| SPA
+    API -->|Mongoose| DB
+    API -->|"create/retrieve session"| StripeAPI
+    SPA -.->|"browser redirect"| StripeUI
+    StripeUI -.->|"redirect back with session_id"| SPA
+    API -.->|"fire-and-forget webhook<br/>(badge approved / project assigned)"| N8N
+
+    style N8N stroke-dasharray: 5 5
 ```
 
-Solid arrows are backend-mediated; the Stripe Checkout redirect is a full browser navigation initiated by the backend's response, not a direct client-to-Stripe API call. The n8n call is entirely one-directional and asynchronous — the backend does not wait for or depend on its response.
+*Figure 1 — High-level system topology.* Solid arrows are backend-mediated; the Stripe Checkout redirect is a full browser navigation initiated by the backend's response, not a direct client-to-Stripe API call. The n8n call is entirely one-directional, asynchronous, and (in the current production deployment) unreachable — dashed to indicate it is best-effort, not a hard dependency.
 
-### 4.2 Process Topology
+### 4.2 Component Interaction Diagram
+
+```mermaid
+flowchart TD
+    Client["React SPA<br/>(fetch/axios via utils/api.js)"]
+    Router["Express Router<br/>app.js route mounting"]
+    MW{{"auth middleware<br/>(applied per-route,<br/>one route excepted)"}}
+    Ctrl["Controller<br/>one of 5 resource controllers"]
+    Model["Mongoose Model<br/>User · Course · Project"]
+    Mongo[("MongoDB")]
+    SocketSrv["Socket.IO Server<br/>JWT handshake auth"]
+
+    Client -->|"REST request"| Router
+    Router --> MW
+    MW -->|"valid JWT → req.user"| Ctrl
+    Ctrl --> Model
+    Model --> Mongo
+    Mongo -->|response data| Ctrl
+    Ctrl -->|"JSON response"| Client
+
+    Client <-.->|"persistent WS connection"| SocketSrv
+    Ctrl -.->|"notifyUser(id, event, payload)"| SocketSrv
+    SocketSrv -.->|"emit to caller's own room only"| Client
+```
+
+*Figure 2 — Component interaction diagram.* The layered REST request path (solid) alongside the parallel, JWT-authenticated Socket.IO path (dashed) that a controller uses to push a real-time notification back to the same user who triggered the underlying action — never a different user, since the Socket.IO room is derived from the verified token, not from client input (§9.3).
+
+### 4.3 Process Topology
 
 Unlike systems that split payment or automation logic into a separate microservice, CompanyGrow runs as exactly **two** processes in local development, and two in production:
 
@@ -132,7 +157,7 @@ Unlike systems that split payment or automation logic into a separate microservi
 
 There is no separate payment microservice, no worker process, and no API gateway. n8n runs as a third, *independent* process (a Docker container) that the backend talks to over HTTP — it is not part of the application's own process topology, and the application functions correctly (Stripe, auth, project/course flows) if n8n is not running at all.
 
-### 4.3 Deployment Topology
+### 4.4 Deployment Topology
 
 This is one of the few sections in this document describing a **confirmed, live** deployment rather than only local development — CompanyGrow is actually deployed, which is not a given for a project at this stage:
 
@@ -247,6 +272,21 @@ The schema is organized into **three** collections: `User`, `Course`, and `Proje
 
 Inter-collection relationships are implemented as genuine Mongoose `ObjectId` references: `Project.assignedUsers[]` and `Project.managedBy` reference `User`; `Course.enrolledUsers[].userId` references `User`; `performanceMetrics[].goals[].refId` on `User` references either a `Course` or a `Project` document, **without a Mongoose `ref` declaration** (the schema comment explicitly notes "No strict ref because it can point to either Course or Project") — meaning Mongoose cannot `populate()` this field automatically, and referential integrity across the two possible target collections is enforced only by application logic, not by the schema.
 
+```mermaid
+flowchart LR
+    User["User<br/>(embeds performanceMetrics[],<br/>goals[], badgesEarned[])"]
+    Course["Course<br/>(embeds content[], enrolledUsers[])"]
+    Project["Project<br/>(assignedUsers[], managedBy)"]
+
+    Project -->|"managedBy<br/>(ObjectId ref)"| User
+    Project -->|"assignedUsers[]<br/>(ObjectId ref)"| User
+    Course -->|"enrolledUsers[].userId<br/>(ObjectId ref)"| User
+    User -.->|"performanceMetrics[].goals[].refId<br/>(ObjectId, no ref declared —<br/>points at Course OR Project<br/>depending on goals[].mode)"| Course
+    User -.->|"same field, other target"| Project
+```
+
+*Figure 3 — Collection relationship overview.* Solid arrows are true Mongoose `ObjectId` references, resolvable via `.populate()`. The dashed arrows are the one relationship in the schema that is **not** a typed reference — `goals[].refId` can point at either `Course` or `Project`, so Mongoose cannot `populate()` it, and nothing enforces which collection it actually points at beyond the application code that wrote it.
+
 ### 7.4 Storage Approach
 
 The schema is heavily denormalized around the `User` document. `performanceMetrics` is an embedded array on `User`, and within each period, `badgesEarned` and `goals` are further embedded subdocuments — there is no separate `Badge` or `Goal` collection anywhere. This keeps a user's entire performance history co-located on a single document (simplifying reads for the employee performance view and manager review view) at the cost of the document growing unboundedly over an employee's tenure, since nothing in the schema caps or archives old `performanceMetrics` entries.
@@ -359,9 +399,43 @@ The frontend's `NotificationBell.js` listens for all four, appends to an in-memo
 
 Two of the four events above **also** trigger a second, independent side effect: a fire-and-forget `fetch()` POST to an n8n webhook URL, read from an environment variable. This is not a generic "every event fans out to n8n" design — only `badge:approved` (in `payment.controller.js`) and `project:assigned` (in `project.controller.js`) have this second side effect; `project:completed` and `course:completed` do not. The webhook call is deliberately not awaited before the HTTP response is sent, and any failure (network error, non-2xx response — the code does not check `response.ok`) is caught and logged, never surfaced to the end user or allowed to fail the underlying request.
 
-### 10.4 Example Flow Described in Text (Badge Approval → Bonus Payout)
+### 10.4 Example Flow: Badge Approval → Bonus Payout
 
-As a representative example of how two of this document's earlier sections combine in practice: a manager reviews an employee's earned badges on the **Review** tab and selects some to convert into a bonus. This does **not** call `approve-badges` directly — it first calls `POST /api/payment/create-bonus-session`, which creates a Stripe Checkout session and returns a redirect URL. The manager completes payment on Stripe's hosted Checkout page (test mode in the current deployment). On success, Stripe redirects the browser to `/manager/bonus-success?session_id=...`, whose `useEffect` retrieves the session via `GET /api/payment/session/:sessionId`, and **only then** calls `POST /api/payment/approve-badges` with the badge IDs stored in the session's metadata. In other words: **in the current implementation, there is no way to mark a badge "approved" without also completing a Stripe payment** — badge approval is a side effect of successful payment, not an independent manager action, even though the two are conceptually separable. (A React `useRef` guard in `bonus-success.js` specifically prevents this approval step from firing twice under React 18 `StrictMode`'s development-mode double-effect invocation — see §12.)
+As a representative example of how several of this document's earlier sections combine in practice: a manager reviews an employee's earned badges on the **Review** tab and selects some to convert into a bonus. This does **not** call `approve-badges` directly — it first creates a Stripe Checkout session, and only *after* that payment succeeds does badge approval happen as a side effect.
+
+```mermaid
+sequenceDiagram
+    actor Manager
+    participant FE as React SPA
+    participant BE as Express API
+    participant Stripe
+    participant Emp as Employee (Socket.IO)
+    participant n8n
+
+    Manager->>FE: Select badges, click "Pay Bonus"
+    FE->>BE: POST /api/payment/create-bonus-session
+    BE->>Stripe: stripe.checkout.sessions.create()
+    Stripe-->>BE: session { url }
+    BE-->>FE: { url }
+    FE->>Stripe: Redirect browser to Checkout
+    Manager->>Stripe: Completes payment (test mode)
+    Stripe-->>FE: Redirect to /manager/bonus-success?session_id=...
+
+    FE->>BE: GET /api/payment/session/:sessionId
+    BE->>Stripe: sessions.retrieve(sessionId)
+    Stripe-->>BE: session details + metadata.badgeIds
+    BE-->>FE: session details
+
+    FE->>BE: POST /api/payment/approve-badges
+    BE->>BE: Match badges by composite key,<br/>set approved = true, save()
+    BE-->>FE: { message: "Badges approved successfully" }
+    BE-)Emp: Socket.IO emit "badge:approved"<br/>(to employee's room only)
+    BE-)n8n: POST webhook (fire-and-forget,<br/>not awaited, failure swallowed)
+```
+
+*Figure 4 — Badge approval / bonus payout sequence.* Note the two `-)` async arrows at the bottom fire **after** the HTTP response to the frontend has already been sent — the Socket.IO notification and the n8n webhook call are both non-blocking side effects, not steps the manager's browser waits on.
+
+**In the current implementation, there is no way to mark a badge "approved" without also completing a Stripe payment** — badge approval is a side effect of successful payment, not an independent manager action, even though the two are conceptually separable. (A React `useRef` guard in `bonus-success.js` specifically prevents the `approve-badges` call from firing twice under React 18 `StrictMode`'s development-mode double-effect invocation — see §12.)
 
 ---
 
@@ -370,7 +444,7 @@ As a representative example of how two of this document's earlier sections combi
 | Integration | Purpose | Interaction with the System | Notes |
 |---|---|---|---|
 | Stripe | Bonus payment processing | Server-side Checkout Session creation/retrieval; client redirects to Stripe's hosted page via `@stripe/stripe-js` | Test mode in the current deployment; no webhook signature verification (see §9.6) |
-| n8n | Workflow automation | Two backend controllers POST a JSON payload to an n8n webhook URL on specific events | Self-hosted via Docker; not reachable from the production backend (see §4.3, §13.1) |
+| n8n | Workflow automation | Two backend controllers POST a JSON payload to an n8n webhook URL on specific events | Self-hosted via Docker; not reachable from the production backend (see §4.4, §13.1) |
 | Socket.IO | Real-time notifications | Backend emits to per-user rooms; frontend listens via `socket.io-client` | JWT-authenticated (§9.3) — a materially stronger posture than an unauthenticated real-time layer |
 | MongoDB Atlas | Managed database hosting | Connection string via `MONGO_URI` | Outside application code; backup/scaling handled at the Atlas layer |
 | Vercel | Frontend hosting | Static build deployment from `frontend/`, `CI=false` required | Live |
